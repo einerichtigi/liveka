@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kastenlst Live-Stream</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f0f0;
+        }
+
+        header {
+            background-color: #ff0055;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+        }
+
+        nav ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        nav ul li {
+            display: inline;
+            margin: 0 15px;
+        }
+
+        nav ul li a {
+            color: white;
+            text-decoration: none;
+        }
+
+        .live-container {
+            background-color: white;
+            margin: 20px auto;
+            padding: 20px;
+            border-radius: 10px;
+            max-width: 800px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            display: none; /* Initially hidden */
+            position: relative; /* Required for absolute positioning of like button */
+        }
+
+        video {
+            width: 100%;
+            border-radius: 10px;
+            margin-bottom: 10px;
+        }
+
+        .live-info {
+            margin-top: 10px;
+        }
+
+        .like-section {
+            position: absolute; /* Make like button position absolute */
+            top: 10px; /* Distance from the top */
+            right: 10px; /* Distance from the right */
+            z-index: 10; /* Ensure the button is on top of the video */
+        }
+
+        .chat-container {
+            margin-top: 20px;
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        .chat-message {
+            margin: 5px 0;
+        }
+
+        footer {
+            text-align: center;
+            padding: 20px;
+            background-color: #ff0055;
+            color: white;
+            position: fixed;
+            width: 100%;
+            bottom: 0;
+        }
+
+        #live-buttons {
+            margin: 10px 0;
+        }
+
+        #live-buttons button {
+            padding: 10px 15px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            background-color: #ff0055;
+            color: white;
+            cursor: pointer;
+        }
+
+        #chat-input {
+            width: 70%;
+            padding: 5px;
+            margin-right: 5px;
+        }
+
+        #send-chat {
+            padding: 6px 10px;
+            border: none;
+            border-radius: 5px;
+            background-color: #ff0055;
+            color: white;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Kastenlst Live-Stream</h1>
+        <nav>
+            <ul>
+                <li><a href="#" id="home-btn">Home</a></li>
+                <li><a href="#">Entdecken</a></li>
+                <li><a href="#" id="start-live-btn">Live starten</a></li>
+                <li><a href="#">Profil</a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        <div id="home-screen">
+            <h2>Aktuelle Live-Streams</h2>
+            <div class="live-container" id="live1">
+                <video id="live-video" autoplay muted></video>
+                <div class="live-info">
+                    <h3>Live-Stream von Person A</h3>
+                    <div id="live-buttons">
+                        <button onclick="joinLive('live1')">Live beitreten</button>
+                    </div>
+                </div>
+            </div>
+            <!-- Fügen Sie hier mehr Live-Streams hinzu -->
+        </div>
+
+        <div class="live-container" id="live-session" style="display:none;">
+            <h2>Live-Stream</h2>
+            <video id="user-video" autoplay></video>
+            <video id="remote-video" autoplay></video>
+            <div class="live-info">
+                <div class="like-section">
+                    <button id="like-button">👍 Like (<span id="like-count">0</span>)</button>
+                </div>
+                <button onclick="startLive()">Live starten</button>
+            </div>
+
+            <!-- Chat Container -->
+            <div class="chat-container" id="chat-container"></div>
+            <input type="text" id="chat-input" placeholder="Nachricht eingeben..." />
+            <button id="send-chat">Senden</button>
+        </div>
+    </main>
+    <footer>
+        <p>&copy; 2024 Kastenlst. Alle Rechte vorbehalten.</p>
+    </footer>
+    <script>
+        let localStream;
+        let remoteStream;
+        let peerConnection;
+        const configuration = {
+            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+        };
+
+        let likeCount = 0; // Initialize like count
+
+        // Event Listener für den Live starten Button
+        document.getElementById('start-live-btn').addEventListener('click', function() {
+            document.getElementById('home-screen').style.display = 'none';
+            document.getElementById('live-session').style.display = 'block';
+            startLive(); // Live-Stream starten
+        });
+
+        // Event Listener für den Home-Button
+        document.getElementById('home-btn').addEventListener('click', function() {
+            document.getElementById('live-session').style.display = 'none';
+            document.getElementById('home-screen').style.display = 'block';
+        });
+
+        async function startLive() {
+            // Zugriff auf die Webcam
+            localStream = await navigator.mediaDevices.getUserMedia({ video: true });
+            document.getElementById('user-video').srcObject = localStream;
+
+            // PeerConnection erstellen
+            peerConnection = new RTCPeerConnection(configuration);
+            localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+            // Remote-Stream empfangen
+            peerConnection.ontrack = event => {
+                remoteStream = event.streams[0];
+                document.getElementById('remote-video').srcObject = remoteStream;
+            };
+
+            // Angebot erstellen und senden (in einer echten Anwendung würdest du das Angebot an einen Server senden)
+            const offer = await peerConnection.createOffer();
+            await peerConnection.setLocalDescription(offer);
+
+            // Hier würdest du den Offer an den Server senden, um den Remote-Peer zu verbinden
+            console.log('Angebot gesendet:', offer);
+
+            // Like-Zähler zurücksetzen
+            likeCount = 0;
+            document.getElementById('like-count').innerText = likeCount;
+        }
+
+        // Like-Button
+        document.getElementById('like-button').addEventListener('click', function() {
+            likeCount++;
+            document.getElementById('like-count').innerText = likeCount;
+        });
+
+        // Chat-Funktionalität
+        document.getElementById('send-chat').addEventListener('click', function() {
+            const chatInput = document.getElementById('chat-input');
+            const message = chatInput.value.trim();
+            if (message) {
+                const chatContainer = document.getElementById('chat-container');
+                const chatMessage = document.createElement('div');
+                chatMessage.className = 'chat-message';
+                chatMessage.innerText = message;
+                chatContainer.appendChild(chatMessage);
+                chatInput.value = ''; // Eingabefeld leeren
+                chatContainer.scrollTop = chatContainer.scrollHeight; // Scrollen zum neuesten Chat
+            }
+        });
+
+        function joinLive(liveId) {
+            document.getElementById('home-screen').style.display = 'none';
+            document.getElementById('live-session').style.display = 'block';
+        }
+    </script>
+</body>
+</html>
